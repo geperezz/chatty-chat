@@ -1,0 +1,74 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: postgres_container
+    ports:
+      - 5433:5432
+    restart: always
+    volumes:
+      - db:/data/postgres
+    networks:
+      - chatty
+    environment:
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_USER=admin
+      - POSTGRES_DB=chatty_db
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin4_container
+    restart: always
+    ports:
+      - "8888:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - chatty
+
+  rabbitmq:
+    image: rabbitmq:4.0.5-management-alpine
+    container_name: "rabbitmq"
+    ports:
+      - 5673:5672
+      - 15673:15672
+    volumes:
+      - rabbit_data:/var/lib/rabbitmq/
+      - rabbit_data:/var/log/rabbitmq/
+    environment:
+      - RABBITMQ_DEFAULT_USER=rabbitmq
+      - RABBITMQ_DEFAULT_PASS=rabbitmq
+    networks:
+      - chatty
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb_contaner
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: 12345678
+      MONGO_INITDB_DATABASE: chatty_app
+    command:
+      - "--logpath"
+      - "/var/log/mongodb/mongod.log"
+    ports:
+      - 27017:27017
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_data:/var/log/mongodb
+    networks:
+      - chatty
+
+networks:
+  chatty:
+    driver: bridge
+
+volumes:
+  db:
+  pgadmin-data:
+  rabbit_data:
+  mongodb_data:

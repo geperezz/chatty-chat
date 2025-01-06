@@ -1,0 +1,13 @@
+{
+    "material-icon-theme.activeIconPack": "nest",
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    },
+    "prettier.requireConfig": true,
+    "editor.formatOnSave": true,
+    "typescript.preferences.quoteStyle": "double",
+    "javascript.preferences.quoteStyle": "double",
+    "prettier.singleQuote": false,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+  
