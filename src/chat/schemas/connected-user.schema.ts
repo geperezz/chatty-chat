@@ -1,16 +1,18 @@
-import { Prop, SchemaFactory } from "@nestjs/mongoose";
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { HydratedDocument, Types } from "mongoose";
 
 export type ConnectedUserDocument = HydratedDocument<ConnectedUser>;
-
+@Schema({
+  timestamps: true,
+})
 export class ConnectedUser {
   @Prop({ type: Types.ObjectId })
   id: Types.ObjectId;
 
-  @Prop()
+  @Prop({ type: String, required: true })
   username: string;
 
-  @Prop()
+  @Prop({ type: String, required: true })
   socketId: string;
 }
 

@@ -13,6 +13,7 @@ import { SocketService } from "src/common/modules/service/socket.service";
 import { envs } from "src/config";
 import { UserPayload } from "src/types/user-payload.type";
 import { ChatService } from "./chat.service";
+import { UserSessionService } from "./user-session.service";
 
 @WebSocketGateway({
   path: "/ws",
@@ -35,6 +36,7 @@ export class ChatGateway
   server: Server;
 
   constructor(
+    private readonly userSessionService: UserSessionService,
     private readonly chatService: ChatService,
     private readonly socketService: SocketService,
     private readonly jwtService: JwtService,
@@ -49,17 +51,35 @@ export class ChatGateway
     this.logger.log(`Client connected: ${socket.id}`);
     try {
       const user = this.authenticateSocket(socket);
+
+      await this.userSessionService.createSession({
+        username: user.username,
+        socketId: socket.id,
+      });
     } catch (error) {
       this.handleConnectionError(socket, error);
     }
   }
 
   public async handleDisconnect(client: Socket) {
-    this.logger.log(`Client disconnected: ${client.id}`);
+    try {
+      this.logger.log(`Client disconnected: ${client.id}`);
+
+      const session = await this.userSessionService.findSessionBySocketId(
+        client.id,
+      );
+
+      if (session) {
+        await this.userSessionService.deleteSession(client.id);
+      }
+    } catch (error) {
+      this.logger.error(`Error disconnecting client: ${error.message}`);
+    }
   }
 
   private authenticateSocket(socket: Socket): UserPayload {
     const token = this.extractJwtToken(socket);
+
     return this.jwtService.verify<UserPayload>(token, {
       secret: envs.JWT_SECRET,
     });
@@ -67,6 +87,7 @@ export class ChatGateway
 
   private extractJwtToken(socket: Socket): string {
     const authHeader = socket.handshake.headers.authorization;
+
     if (!authHeader)
       throw new UnauthorizedException("No authorization header found");
 

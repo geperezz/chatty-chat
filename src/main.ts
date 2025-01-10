@@ -3,6 +3,7 @@ import { NestFactory } from "@nestjs/core";
 import { MicroserviceOptions, Transport } from "@nestjs/microservices";
 import { DateTime } from "luxon";
 import { AppModule } from "./app.module";
+import { UserSessionService } from "./chat/user-session.service";
 import { envs } from "./config";
 
 async function bootstrap() {
@@ -28,6 +29,10 @@ async function bootstrap() {
   });
 
   await app.listen(envs.PORT);
+
+  const userSessionService = app.get(UserSessionService);
+
+  await userSessionService.deleteAllSessions();
 
   await app.startAllMicroservices();
 
