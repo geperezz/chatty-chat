@@ -4,6 +4,7 @@ import { MicroserviceOptions, Transport } from "@nestjs/microservices";
 import { DateTime } from "luxon";
 import { AppModule } from "./app.module";
 import { UserSessionService } from "./chat/user-session.service";
+import { RpcExceptionFilter } from "./common/filters/rpc-exception.filter";
 import { envs } from "./config";
 
 async function bootstrap() {
@@ -35,6 +36,8 @@ async function bootstrap() {
   await userSessionService.deleteAllSessions();
 
   await app.startAllMicroservices();
+
+  app.useGlobalFilters(new RpcExceptionFilter());
 
   logger.log(`🚀  Server is running $`);
   logger.log(`🚀  Microservice is running`);

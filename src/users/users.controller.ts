@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param } from "@nestjs/common";
-import { MessagePattern } from "@nestjs/microservices";
+import { MessagePattern, RpcException } from "@nestjs/microservices";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UsersService } from "./users.service";
 
@@ -9,7 +9,11 @@ export class UsersController {
 
   @MessagePattern("create_user")
   async create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+    try {
+      return await this.usersService.create(createUserDto);
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 
   @Get(":username")

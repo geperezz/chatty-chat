@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
-import { Document, HydratedDocument, Types } from "mongoose";
+import { HydratedDocument, Types } from "mongoose";
 
 export type UserDocument = HydratedDocument<User>;
 
@@ -16,7 +16,7 @@ export class User {
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-export interface IUser extends Document {
-  readonly id: Types.ObjectId;
+export interface IUser {
+  readonly _id: Types.ObjectId;
   readonly username: string;
 }
