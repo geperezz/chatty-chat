@@ -4,15 +4,18 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   OnGatewayInit,
+  SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from "@nestjs/websockets";
+import { Observable } from "rxjs";
 import { Server, Socket } from "socket.io";
 import { CORS } from "src/common/constants";
 import { SocketService } from "src/common/modules/service/socket.service";
 import { envs } from "src/config";
 import { UserPayload } from "src/types/user-payload.type";
 import { ChatService } from "./chat.service";
+import { MessageDto } from "./dto/message.dto";
 import { UserSessionService } from "./user-session.service";
 
 @WebSocketGateway({
@@ -56,6 +59,8 @@ export class ChatGateway
         username: user.username,
         socketId: socket.id,
       });
+
+      await this.chatService.joinMyChatsRoom(user.username, socket);
     } catch (error) {
       this.handleConnectionError(socket, error);
     }
@@ -75,6 +80,22 @@ export class ChatGateway
     } catch (error) {
       this.logger.error(`Error disconnecting client: ${error.message}`);
     }
+  }
+
+  @SubscribeMessage("send-message")
+  async onMessage(client: Socket, data: MessageDto) {
+    const event: string = "message";
+
+    await this.chatService.storeMessage(data);
+
+    client.to(data.roomId).emit(event, data);
+
+    this.logger.log(`Message sent to room ${data.roomId}`);
+
+    return new Observable((observer) => {
+      observer.next({ event, data });
+      observer.complete();
+    });
   }
 
   private authenticateSocket(socket: Socket): UserPayload {
