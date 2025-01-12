@@ -19,7 +19,7 @@ export class ConnectedUser {
 export const ConnectedUserSchema = SchemaFactory.createForClass(ConnectedUser);
 
 export interface IConnectedUser {
-  readonly id: Types.ObjectId;
+  readonly _id: Types.ObjectId;
   readonly username: string;
   readonly socketId: string;
 }

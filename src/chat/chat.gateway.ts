@@ -75,6 +75,7 @@ export class ChatGateway
       );
 
       if (session) {
+        await this.disconnectClientOfTheRooms(client);
         await this.userSessionService.deleteSession(client.id);
       }
     } catch (error) {
@@ -94,6 +95,26 @@ export class ChatGateway
 
     return new Observable((observer) => {
       observer.next({ event, data });
+      observer.complete();
+    });
+  }
+
+  @SubscribeMessage("join-room")
+  async onJoinRoom(client: Socket, roomId: string) {
+    const user = await this.userSessionService.findSessionBySocketId(client.id);
+
+    if (!user) {
+      throw new UnauthorizedException("User not found");
+    }
+
+    await this.chatService.joinChatRoom(roomId, user);
+
+    this.logger.log(`Client ${client.id} joined room ${roomId}`);
+
+    client.to(roomId).emit("user-joined", user.username);
+
+    return new Observable((observer) => {
+      observer.next({ event: "join-room", data: roomId });
       observer.complete();
     });
   }
@@ -125,5 +146,25 @@ export class ChatGateway
     );
     socket.emit("exception", "Authentication error");
     socket.disconnect();
+  }
+
+  private async disconnectClientOfTheRooms(client: Socket): Promise<void> {
+    const user = await this.userSessionService.findSessionBySocketId(client.id);
+
+    if (!user) {
+      return;
+    }
+
+    const rooms = await this.chatService.findRoomsByUsername(user.username);
+
+    if (rooms.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      rooms.map(async (room) => {
+        client.leave(room._id.toString());
+      }),
+    );
   }
 }

@@ -1,14 +1,22 @@
-import { BadRequestException, Inject, Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  forwardRef,
+  Inject,
+  Injectable,
+} from "@nestjs/common";
 import { RpcException } from "@nestjs/microservices";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { Socket } from "socket.io";
+import { SocketService } from "src/common/modules/service/socket.service";
 import { UsersService } from "src/users/users.service";
 import { CreateRoomDto } from "./dto/create-room.dto";
 import { MessageDto } from "./dto/message.dto";
 import { FormattedResponseRooms } from "./interfaces/formattedResponseRooms.interface";
+import { IConnectedUser } from "./mongodb/schemas/connected-user.schema";
 import { Message } from "./mongodb/schemas/message.schema";
 import { Room, RoomType } from "./mongodb/schemas/room.schema";
+import { UserSessionService } from "./user-session.service";
 
 @Injectable()
 export class ChatService {
@@ -17,6 +25,10 @@ export class ChatService {
     private readonly roomCollection: Model<Room>,
     @Inject(UsersService)
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => UsersService))
+    private readonly socketService: SocketService,
+    @Inject(forwardRef(() => UserSessionService))
+    private readonly userSessionService: UserSessionService,
   ) {}
 
   async createRoom(payload: CreateRoomDto): Promise<Room> {
@@ -75,6 +87,51 @@ export class ChatService {
         await client.join(chat._id.toString());
       }),
     );
+  }
+
+  async joinChatRoom(roomId: string, user: IConnectedUser): Promise<void> {
+    const room = await this.roomCollection
+      .findById({
+        _id: roomId,
+      })
+      .exec();
+
+    if (!room) {
+      throw new RpcException(new BadRequestException("Room not found"));
+    }
+
+    const isMember = room.members.some((member) => member.id === user._id);
+
+    if (isMember) {
+      throw new RpcException(
+        new BadRequestException("User is already part of the room"),
+      );
+    }
+
+    if (room.type === RoomType.SINGLE) {
+      throw new RpcException(
+        new BadRequestException("Cannot join a single chat room"),
+      );
+    }
+
+    const userSession = await this.userSessionService.findSessionByUsername(
+      user.username,
+    );
+
+    await this.roomCollection.findOneAndUpdate(
+      { _id: roomId },
+      { $push: { members: { userId: user._id, username: user.username } } },
+    );
+
+    if (userSession.length > 0) {
+      await Promise.all(
+        userSession.map(async (session) => {
+          await this.socketService.socket
+            .in(session.socketId)
+            .socketsJoin(roomId);
+        }),
+      );
+    }
   }
 
   async storeMessage(payload: MessageDto): Promise<Room> {
