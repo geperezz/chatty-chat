@@ -138,12 +138,10 @@ export class ChatGateway
 
       this.logger.log(`Client ${client.id} joined room ${data.roomId}`);
 
-      client
-        .to(data.roomId)
-        .emit("user-joined", {
-          roomId: data.roomId,
-          message: `${user.username} joined the room`,
-        });
+      client.to(data.roomId).emit("user-joined", {
+        roomId: data.roomId,
+        message: `${user.username} joined the room`,
+      });
 
       return new Observable((observer) => {
         observer.next({ event: "join-room", data: data.roomId });
@@ -164,7 +162,9 @@ export class ChatGateway
   }
 
   private extractJwtToken(socket: Socket): string {
-    const authHeader = socket.handshake.headers.authorization;
+    const authHeader = socket.handshake.auth.token;
+
+    console.log("Auth header", authHeader);
 
     if (!authHeader)
       throw new UnauthorizedException("No authorization header found");
