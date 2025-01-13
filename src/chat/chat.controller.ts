@@ -41,4 +41,15 @@ export class ChatController {
       throw new RpcException(error);
     }
   }
+
+  @MessagePattern("rooms_group")
+  async getGroupRooms() {
+    try {
+      this.logger.log("Getting group rooms");
+      return await this.chatService.findGroupRooms();
+    } catch (error) {
+      this.logger.error(error);
+      throw new RpcException(error);
+    }
+  }
 }

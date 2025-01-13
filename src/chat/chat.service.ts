@@ -13,7 +13,6 @@ import { UsersService } from "src/users/users.service";
 import { CreateRoomDto } from "./dto/create-room.dto";
 import { MessageDto } from "./dto/message.dto";
 import { FormattedResponseRooms } from "./interfaces/formattedResponseRooms.interface";
-import { IConnectedUser } from "./mongodb/schemas/connected-user.schema";
 import { Message } from "./mongodb/schemas/message.schema";
 import { Room, RoomType } from "./mongodb/schemas/room.schema";
 import { UserSessionService } from "./user-session.service";
@@ -25,7 +24,7 @@ export class ChatService {
     private readonly roomCollection: Model<Room>,
     @Inject(UsersService)
     private readonly usersService: UsersService,
-    @Inject(forwardRef(() => UsersService))
+    @Inject(forwardRef(() => SocketService))
     private readonly socketService: SocketService,
     @Inject(forwardRef(() => UserSessionService))
     private readonly userSessionService: UserSessionService,
@@ -36,6 +35,12 @@ export class ChatService {
 
     if (findUsers.length === 0) {
       throw new RpcException(new BadRequestException("Users not found"));
+    }
+
+    if (findUsers.length > 2 && payload.type === RoomType.SINGLE) {
+      throw new RpcException(
+        new BadRequestException("Cannot create a room with more than 2 users"),
+      );
     }
 
     const userIds = findUsers.map((user) => user._id);
@@ -89,7 +94,7 @@ export class ChatService {
     );
   }
 
-  async joinChatRoom(roomId: string, user: IConnectedUser): Promise<void> {
+  async joinChatRoom(roomId: string, username: string): Promise<void> {
     const room = await this.roomCollection
       .findById({
         _id: roomId,
@@ -100,7 +105,15 @@ export class ChatService {
       throw new RpcException(new BadRequestException("Room not found"));
     }
 
-    const isMember = room.members.some((member) => member.id === user._id);
+    const user = await this.usersService.findOne(username);
+
+    console.log("User", user);
+
+    const isMember = room.members.some(
+      (member) => member.userId === user._id.toString(),
+    );
+
+    console.log("Is member", isMember);
 
     if (isMember) {
       throw new RpcException(
@@ -118,20 +131,24 @@ export class ChatService {
       user.username,
     );
 
+    if (userSession.length > 0) {
+      await Promise.all(
+        userSession.map(async (session) => {
+          this.socketService.socket.in(session.socketId).socketsJoin(roomId);
+          this.socketService.socket
+            .in(session.socketId)
+            .emit("user-joined-success", {
+              message: "You have joined successfully",
+              roomId,
+            });
+        }),
+      );
+    }
+
     await this.roomCollection.findOneAndUpdate(
       { _id: roomId },
       { $push: { members: { userId: user._id, username: user.username } } },
     );
-
-    if (userSession.length > 0) {
-      await Promise.all(
-        userSession.map(async (session) => {
-          await this.socketService.socket
-            .in(session.socketId)
-            .socketsJoin(roomId);
-        }),
-      );
-    }
   }
 
   async storeMessage(payload: MessageDto): Promise<Room> {
@@ -214,5 +231,15 @@ export class ChatService {
     }));
 
     return formattedRooms;
+  }
+
+  async findGroupRooms(): Promise<Room[]> {
+    const rooms = await this.roomCollection
+      .find({
+        type: RoomType.GROUP,
+      })
+      .exec();
+
+    return rooms;
   }
 }

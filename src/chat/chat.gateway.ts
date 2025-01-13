@@ -1,16 +1,26 @@
-import { Logger, UnauthorizedException } from "@nestjs/common";
+import {
+  Logger,
+  UnauthorizedException,
+  UseFilters,
+  UsePipes,
+  ValidationPipe,
+} from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import {
+  ConnectedSocket,
+  MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
   OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
+  WsException,
 } from "@nestjs/websockets";
 import { Observable } from "rxjs";
 import { Server, Socket } from "socket.io";
 import { CORS } from "src/common/constants";
+import { WebsocketExceptionsFilter } from "src/common/filters/socket-exception.filter";
 import { SocketService } from "src/common/modules/service/socket.service";
 import { envs } from "src/config";
 import { UserPayload } from "src/types/user-payload.type";
@@ -31,6 +41,8 @@ import { UserSessionService } from "./user-session.service";
     skipMiddlewares: true,
   },
 })
+@UseFilters(WebsocketExceptionsFilter)
+@UsePipes(new ValidationPipe({ transform: true }))
 export class ChatGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
@@ -84,39 +96,63 @@ export class ChatGateway
   }
 
   @SubscribeMessage("send-message")
-  async onMessage(client: Socket, data: MessageDto) {
-    const event: string = "message";
+  async onMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: MessageDto,
+  ) {
+    try {
+      const event: string = "message";
 
-    await this.chatService.storeMessage(data);
+      await this.chatService.storeMessage(data);
 
-    client.to(data.roomId).emit(event, data);
+      client.to(data.roomId).emit(event, data);
 
-    this.logger.log(`Message sent to room ${data.roomId}`);
+      this.logger.log(`Message sent to room ${data.roomId}`);
 
-    return new Observable((observer) => {
-      observer.next({ event, data });
-      observer.complete();
-    });
+      return new Observable((observer) => {
+        observer.next({ event, data });
+        observer.complete();
+      });
+    } catch (error) {
+      this.logger.error(`Error sending message: ${error.message}`);
+      throw new WsException(error.message);
+    }
   }
 
   @SubscribeMessage("join-room")
-  async onJoinRoom(client: Socket, roomId: string) {
-    const user = await this.userSessionService.findSessionBySocketId(client.id);
+  async onJoinRoom(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { roomId: string },
+  ) {
+    console.log("Join room", data.roomId);
+    try {
+      const user = await this.userSessionService.findSessionBySocketId(
+        client.id,
+      );
 
-    if (!user) {
-      throw new UnauthorizedException("User not found");
+      if (!user) {
+        throw new UnauthorizedException("User not found");
+      }
+
+      await this.chatService.joinChatRoom(data.roomId, user.username);
+
+      this.logger.log(`Client ${client.id} joined room ${data.roomId}`);
+
+      client
+        .to(data.roomId)
+        .emit("user-joined", {
+          roomId: data.roomId,
+          message: `${user.username} joined the room`,
+        });
+
+      return new Observable((observer) => {
+        observer.next({ event: "join-room", data: data.roomId });
+        observer.complete();
+      });
+    } catch (error) {
+      this.logger.error(`Error joining room: ${error.message}`);
+      throw new WsException(error.message);
     }
-
-    await this.chatService.joinChatRoom(roomId, user);
-
-    this.logger.log(`Client ${client.id} joined room ${roomId}`);
-
-    client.to(roomId).emit("user-joined", user.username);
-
-    return new Observable((observer) => {
-      observer.next({ event: "join-room", data: roomId });
-      observer.complete();
-    });
   }
 
   private authenticateSocket(socket: Socket): UserPayload {
