@@ -103,9 +103,11 @@ export class ChatGateway
     try {
       const event: string = "message";
 
-      await this.chatService.storeMessage(data);
+      const updateMessage = await this.chatService.storeMessage(data);
 
-      client.to(data.roomId).emit(event, data);
+      console.log("Message", updateMessage);
+
+      client.to(data.roomId).emit(event, updateMessage);
 
       this.logger.log(`Message sent to room ${data.roomId}`);
 

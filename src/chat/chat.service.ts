@@ -151,7 +151,7 @@ export class ChatService {
     );
   }
 
-  async storeMessage(payload: MessageDto): Promise<Room> {
+  async storeMessage(payload: MessageDto) {
     if (!payload.roomId) {
       throw new RpcException(new BadRequestException("Room ID is required"));
     }
@@ -187,7 +187,12 @@ export class ChatService {
       )
       .exec();
 
-    return updatedRoom;
+    return {
+      roomId: updatedRoom._id,
+      senderId: payload.senderId,
+      contents: payload.contents,
+      _id: updatedRoom.messages[updatedRoom.messages.length - 1].id,
+    };
   }
 
   async findRoomById(payload: {

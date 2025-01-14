@@ -22,7 +22,9 @@ export class ChatController {
   async getMyRooms(@Body() username: string) {
     try {
       this.logger.log(`Getting rooms for ${username}`);
-      return await this.chatService.findRoomsByUsername(username);
+      const room = await this.chatService.findRoomsByUsername(username);
+      this.logger.log(`Rooms found for ${username}, ${room}`);
+      return room;
     } catch (error) {
       this.logger.error(error);
       throw new RpcException(error);
